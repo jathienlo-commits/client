@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js')
 
-const ASTRO_KEY = process.env.ASTRO_KEY
+const ASTRO_KEY = 'astro_876476df8dca87c719dae859607b684b'
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const BASE_URL = 'https://astrproject.net'
 
