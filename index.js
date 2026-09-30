@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuild
 
 const ASTRO_KEY = 'astro_876476df8dca87c719dae859607b684b'
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
-const BASE_URL = 'https://astrproject.net'
+const BASE_URL = 'https://astroprotect.net'
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
 
