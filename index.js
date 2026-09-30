@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js')
 
 const ASTRO_KEY = 'astro_876476df8dca87c719dae859607b684b'
-const DISCORD_TOKEN = 'MTU1NDkyNTI5MTMwOTExMzQ1NQ.GAgDEo.Z5TkY8ujKDk_fC-3YeHyER8PBlcjis-gsEJxzY'
+const DISCORD_TOKEN = 'MTU1NDkyNTI5MTMwOTExMzQ1NQ.Gb6dH5.s4H57YXJzt5nFZahU6g120QGKTM67ZbaEJZFGA'
 const BASE_URL = 'https://astrproject.net'
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
