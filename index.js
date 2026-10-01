@@ -16,6 +16,34 @@ async function astro(method, path, body = null) {
     return res.json()
 }
 
+// Parse human-readable duration into an ISO expiry date string
+// Accepts: "1 week", "5 hours", "30 minutes", "2 days", "lifetime", "1 month", "1 year"
+function parseDuration(input) {
+    if (!input) return null
+    const s = input.trim().toLowerCase()
+    if (s === 'lifetime' || s === 'never' || s === 'permanent') return null
+
+    const units = {
+        minute: 60, minutes: 60, min: 60, mins: 60,
+        hour: 3600, hours: 3600, hr: 3600, hrs: 3600,
+        day: 86400, days: 86400,
+        week: 604800, weeks: 604800, wk: 604800, wks: 604800,
+        month: 2592000, months: 2592000, mo: 2592000,
+        year: 31536000, years: 31536000, yr: 31536000, yrs: 31536000,
+    }
+
+    const match = s.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/)
+    if (!match) return 'invalid'
+
+    const amount = parseFloat(match[1])
+    const unit = match[2]
+    const seconds = units[unit]
+    if (!seconds) return 'invalid'
+
+    const expiry = new Date(Date.now() + amount * seconds * 1000)
+    return expiry.toISOString()
+}
+
 const commands = [
     new SlashCommandBuilder()
         .setName('health')
@@ -37,11 +65,12 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName('createkey')
-        .setDescription('Create a new key for a loader')
+        .setDescription('Create a new key and optionally send it to a user')
         .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true))
+        .addUserOption(o => o.setName('user').setDescription('Discord user to send the key to').setRequired(false))
+        .addStringOption(o => o.setName('duration').setDescription('e.g. lifetime, 1 week, 5 hours, 30 days').setRequired(false))
         .addStringOption(o => o.setName('note').setDescription('Label for the key').setRequired(false))
-        .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (omit for unlimited)').setRequired(false))
-        .addStringOption(o => o.setName('expires_at').setDescription('Expiry ISO date (omit for never)').setRequired(false)),
+        .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (omit for unlimited)').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('revokekey')
@@ -174,20 +203,82 @@ client.on('interactionCreate', async interaction => {
 
         if (cmd === 'createkey') {
             const id = interaction.options.getString('id')
-            const body = {}
+            const targetUser = interaction.options.getUser('user')
+            const durationInput = interaction.options.getString('duration')
             const note = interaction.options.getString('note')
             const max_uses = interaction.options.getInteger('max_uses')
-            const expires_at = interaction.options.getString('expires_at')
+
+            // Parse duration
+            let expires_at = null
+            let durationLabel = 'lifetime'
+            if (durationInput) {
+                const parsed = parseDuration(durationInput)
+                if (parsed === 'invalid') {
+                    return interaction.editReply(
+                        `❌ Invalid duration \`${durationInput}\`.\nExamples: \`lifetime\`, \`1 week\`, \`5 hours\`, \`30 days\`, \`2 months\``
+                    )
+                }
+                expires_at = parsed
+                durationLabel = durationInput
+            }
+
+            // Build request body
+            const body = {}
             if (note) body.note = note
             if (max_uses) body.max_uses = max_uses
             if (expires_at) body.expires_at = expires_at
+
             const data = await astro('POST', `/api/loader/${id}/keys`, body)
             if (!data.success) return interaction.editReply(`Error: ${JSON.stringify(data)}`)
-            const embed = new EmbedBuilder()
+
+            const keyValue = data.data.key_value
+
+            // Reply in channel
+            const channelEmbed = new EmbedBuilder()
                 .setTitle('Key Created')
                 .setColor(0x00ff88)
-                .addFields({ name: 'Key', value: `\`${data.data.key_value}\``, inline: false })
-            return interaction.editReply({ embeds: [embed] })
+                .addFields(
+                    { name: 'Loader', value: `\`${id}\``, inline: true },
+                    { name: 'Duration', value: durationLabel, inline: true },
+                    { name: 'Max Uses', value: max_uses ? String(max_uses) : 'unlimited', inline: true },
+                    { name: 'Expires', value: expires_at ? `<t:${Math.floor(new Date(expires_at).getTime() / 1000)}:F>` : 'never', inline: false },
+                )
+            if (note) channelEmbed.addFields({ name: 'Note', value: note, inline: false })
+            if (targetUser) channelEmbed.addFields({ name: 'Sent to', value: `${targetUser}`, inline: false })
+
+            await interaction.editReply({ embeds: [channelEmbed] })
+
+            // DM the user if specified
+            if (targetUser) {
+                try {
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('🔑 You received a key')
+                        .setColor(0x00ff88)
+                        .setDescription(`${interaction.user} sent you a key.`)
+                        .addFields(
+                            { name: 'Key', value: `\`\`\`${keyValue}\`\`\``, inline: false },
+                            { name: 'Duration', value: durationLabel, inline: true },
+                            { name: 'Max Uses', value: max_uses ? String(max_uses) : 'unlimited', inline: true },
+                            { name: 'Expires', value: expires_at ? `<t:${Math.floor(new Date(expires_at).getTime() / 1000)}:F>` : 'never', inline: false },
+                        )
+                    if (note) dmEmbed.addFields({ name: 'Note', value: note, inline: false })
+                    await targetUser.send({ embeds: [dmEmbed] })
+                } catch {
+                    // User has DMs closed — follow up in channel with the key visible to the invoker
+                    await interaction.followUp({
+                        content: `⚠️ Could not DM ${targetUser} (DMs closed). Key: \`${keyValue}\``,
+                        ephemeral: true
+                    })
+                }
+            } else {
+                // No user — send key ephemerally to invoker so it's not public
+                await interaction.followUp({
+                    content: `🔑 Key: \`${keyValue}\``,
+                    ephemeral: true
+                })
+            }
+
+            return
         }
 
         if (cmd === 'revokekey') {
