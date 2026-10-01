@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuild
 
 const ASTRO_KEY = 'astro_876476df8dca87c719dae859607b684b'
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
+const LOADER_ID = 's5zJ9VdmQq'
 const BASE_URL = 'https://astroprotect.net'
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] })
@@ -55,18 +56,15 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName('analytics')
-        .setDescription('Get loader analytics')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true)),
+        .setDescription('Get loader analytics'),
 
     new SlashCommandBuilder()
         .setName('keys')
-        .setDescription('List keys for a loader')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true)),
+        .setDescription('List keys for a loader'),
 
     new SlashCommandBuilder()
         .setName('createkey')
         .setDescription('Create a new key and optionally send it to a user')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true))
         .addUserOption(o => o.setName('user').setDescription('Discord user to send the key to').setRequired(false))
         .addStringOption(o => o.setName('duration').setDescription('e.g. lifetime, 1 week, 5 hours, 30 days').setRequired(false))
         .addStringOption(o => o.setName('note').setDescription('Label for the key').setRequired(false))
@@ -75,7 +73,6 @@ const commands = [
     new SlashCommandBuilder()
         .setName('revokekey')
         .setDescription('Revoke or restore a key')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true))
         .addIntegerOption(o => o.setName('key_id').setDescription('Numeric key ID').setRequired(true))
         .addStringOption(o => o.setName('status').setDescription('active or revoked').setRequired(true)
             .addChoices({ name: 'active', value: 'active' }, { name: 'revoked', value: 'revoked' }))
@@ -84,13 +81,11 @@ const commands = [
     new SlashCommandBuilder()
         .setName('deletekey')
         .setDescription('Permanently delete a key')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true))
         .addIntegerOption(o => o.setName('key_id').setDescription('Numeric key ID').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('updateloader')
         .setDescription('Update loader settings')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true))
         .addStringOption(o => o.setName('name').setDescription('New name').setRequired(false))
         .addStringOption(o => o.setName('status').setDescription('active or disabled').setRequired(false)
             .addChoices({ name: 'active', value: 'active' }, { name: 'disabled', value: 'disabled' }))
@@ -100,8 +95,7 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName('deleteloader')
-        .setDescription('Permanently delete a loader')
-        .addStringOption(o => o.setName('id').setDescription('Loader ID').setRequired(true)),
+        .setDescription('Permanently delete a loader'),
 ]
 
 client.once('ready', async () => {
@@ -155,7 +149,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'analytics') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const data = await astro('GET', `/api/loader/${id}/analytics`)
             if (!data.success) return interaction.editReply(`Error: ${JSON.stringify(data)}`)
             const t = data.data.totals
@@ -176,7 +170,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'keys') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const data = await astro('GET', `/api/loader/${id}/keys`)
             if (!data.success) return interaction.editReply(`Error: ${JSON.stringify(data)}`)
             const keys = data.data.keys ?? []
@@ -202,7 +196,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'createkey') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const targetUser = interaction.options.getUser('user')
             const durationInput = interaction.options.getString('duration')
             const note = interaction.options.getString('note')
@@ -234,19 +228,8 @@ client.on('interactionCreate', async interaction => {
             const keyValue = data.data.key_value
 
             // Reply in channel
-            const channelEmbed = new EmbedBuilder()
-                .setTitle('Key Created')
-                .setColor(0x00ff88)
-                .addFields(
-                    { name: 'Loader', value: `\`${id}\``, inline: true },
-                    { name: 'Duration', value: durationLabel, inline: true },
-                    { name: 'Max Uses', value: max_uses ? String(max_uses) : 'unlimited', inline: true },
-                    { name: 'Expires', value: expires_at ? `<t:${Math.floor(new Date(expires_at).getTime() / 1000)}:F>` : 'never', inline: false },
-                )
-            if (note) channelEmbed.addFields({ name: 'Note', value: note, inline: false })
-            if (targetUser) channelEmbed.addFields({ name: 'Sent to', value: `${targetUser}`, inline: false })
-
-            await interaction.editReply({ embeds: [channelEmbed] })
+            const sentTo = targetUser ? ` to ${targetUser}` : ''
+            await interaction.editReply(`Key sent${sentTo}.`)
 
             // DM the user if specified
             if (targetUser) {
@@ -282,7 +265,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'revokekey') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const keyId = interaction.options.getInteger('key_id')
             const status = interaction.options.getString('status')
             const resethwid = interaction.options.getBoolean('reset_hwid')
@@ -293,14 +276,14 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'deletekey') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const keyId = interaction.options.getInteger('key_id')
             const data = await astro('DELETE', `/api/loader/${id}/keys/${keyId}`)
             return interaction.editReply(data.success ? `Key ${keyId} permanently deleted.` : `Error: ${JSON.stringify(data)}`)
         }
 
         if (cmd === 'updateloader') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const body = {}
             const name = interaction.options.getString('name')
             const status = interaction.options.getString('status')
@@ -315,7 +298,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (cmd === 'deleteloader') {
-            const id = interaction.options.getString('id')
+            const id = LOADER_ID
             const data = await astro('DELETE', `/api/loader/${id}`)
             return interaction.editReply(data.success ? `Loader \`${id}\` permanently deleted.` : `Error: ${JSON.stringify(data)}`)
         }
